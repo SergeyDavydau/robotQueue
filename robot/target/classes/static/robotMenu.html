@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<script type="text/javascript" src="js/jquery.min.js"></script>
+
+<script>
+    $(document).ready(function (d) {
+
+        console.log('GET LOGS');
+        getLogs();
+
+    });
+
+    function getLogs() {
+        $.post('/getLogs', {}, function (d) {
+            var inf = $.parseJSON(d);
+
+
+            if(inf.logsArr.length > 0){
+                var lastLogData = $('#robot_console').html();
+                var newLogData = '';
+                $.each(inf.logsArr, function (i,items) {
+                    newLogData += items.value + '\n';
+                });
+                $('#robot_console').html(lastLogData + newLogData);
+            }
+            if(inf.robotArr.length > 0){
+                var robotsName = '';
+                $.each(inf.robotArr, function (i,items) {
+                    robotsName += items.value + '\n';
+                });
+                $('#robots_name').html(robotsName);
+            }
+
+            if(inf.taskArr.length > 0){
+                var taskArr = '';
+                $.each(inf.taskArr, function (i,items) {
+                    taskArr += items.value + '\n';
+                });
+                $('#robots_task').html(taskArr);
+            }else{
+                $('#robots_task').html('');
+            }
+            getLogs();
+        })
+    }
+
+    function add(code) {
+        $.ajax({
+            url: "/sendComand",
+            method: "POST",
+            data: {comand: code},
+            async: true,
+            success: function () {
+                $('#robot_console').html(d);
+            }
+        });
+    }
+</script>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Robot interface</title>
+
+
+</head>
+<body>
+<div class="row" align="center">
+
+    <div style="display: inline-block">
+        <div>ROBOT NAME</div>
+        <textarea id="robots_name" type="text" style="height: 400px; width: 150px" class="text-area"></textarea>
+    </div>
+
+    <div style="display: inline-block">
+        LOGS
+        <div>
+        <textarea id="robot_console" type="text" style="height: 400px; width: 1100px" class="text-area">
+        </textarea>
+        </div>
+
+        <div style="display: inline">
+
+            <button type="button" value="ADD" onclick="add('produce')">Назначить приготовление</button>
+        </div>
+        <div style="display: inline">
+
+            <button type="button" value="ADD" onclick="add('delivery')">Назначить доставку</button>
+        </div>
+        <div style="display: inline">
+
+            <button type="button" value="ADD" onclick="add('clean')">Назначить уборку</button>
+        </div>
+    </div>
+
+    <div style="display: inline-block">
+        <div>ROBOT TASK</div>
+        <textarea id="robots_task" type="text" style="height: 400px; width: 150px" class="text-area"></textarea>
+    </div>
+
+</div>
+
+</body>
+</html>
