@@ -15,43 +15,48 @@
             var inf = $.parseJSON(d);
 
 
-            if(inf.logsArr.length > 0){
+            if (inf.logsArr.length > 0) {
                 var lastLogData = $('#robot_console').html();
                 var newLogData = '';
-                $.each(inf.logsArr, function (i,items) {
+                $.each(inf.logsArr, function (i, items) {
                     newLogData += items.value + '\n';
                 });
                 $('#robot_console').html(lastLogData + newLogData);
             }
-            if(inf.robotArr.length > 0){
+            if (inf.robotArr.length > 0) {
                 var robotsName = '';
-                $.each(inf.robotArr, function (i,items) {
+                $.each(inf.robotArr, function (i, items) {
                     robotsName += items.value + '\n';
                 });
                 $('#robots_name').html(robotsName);
+            } else {
+                $('#robots_name').html('');
             }
 
-            if(inf.taskArr.length > 0){
+            if (inf.taskArr.length > 0) {
                 var taskArr = '';
-                $.each(inf.taskArr, function (i,items) {
+                $.each(inf.taskArr, function (i, items) {
                     taskArr += items.value + '\n';
                 });
                 $('#robots_task').html(taskArr);
-            }else{
+            } else {
                 $('#robots_task').html('');
             }
-            getLogs();
+
+            setTimeout(getLogs(), 3000);
         })
     }
 
     function add(code) {
         $.ajax({
-            url: "/sendComand",
+            url: "/sendCommand",
             method: "POST",
-            data: {comand: code},
+            data: {
+                command: code,
+                name: $('#' + code + '_name').val()
+            },
             async: true,
             success: function () {
-                $('#robot_console').html(d);
             }
         });
     }
@@ -64,32 +69,41 @@
 
 </head>
 <body>
+<br>
 <div class="row" align="center">
 
     <div style="display: inline-block">
         <div>ROBOT NAME</div>
-        <textarea id="robots_name" type="text" style="height: 400px; width: 150px" class="text-area"></textarea>
+        <textarea id="robots_name" style="height: 400px; width: 150px" class="text-area"></textarea>
     </div>
 
     <div style="display: inline-block">
-        LOGS
-        <div>
-        <textarea id="robot_console" type="text" style="height: 400px; width: 1100px" class="text-area">
-        </textarea>
+
+        <div>LOGS</div>
+        <textarea id="robot_console" type="text" style="height: 400px; width: 1400px" class="text-area"></textarea>
+
+        <div style="width: 1400px">
+            <div style="display: inline">
+                <button type="button" onclick="add('produce')">Назначить приготовление</button>
+                <input id="produce_name" placeholder="Producer #n">
+            </div>
+            <div style="display: inline">
+
+                <button type="button" onclick="add('delivery')">Назначить доставку</button>
+                <input id="delivery_name" placeholder="Deliveryman #n">
+            </div>
+            <div style="display: inline">
+
+                <button type="button" onclick="add('clean')">Назначить уборку</button>
+                <input id="clean_name" placeholder="Cleaner #n">
+            </div>
+
+            <div style="display: inline">
+                <button type="button" onclick="add('kill')">Удалить робота</button>
+                <input id="kill_name" placeholder="Name_robot #n">
+            </div>
         </div>
 
-        <div style="display: inline">
-
-            <button type="button" value="ADD" onclick="add('produce')">Назначить приготовление</button>
-        </div>
-        <div style="display: inline">
-
-            <button type="button" value="ADD" onclick="add('delivery')">Назначить доставку</button>
-        </div>
-        <div style="display: inline">
-
-            <button type="button" value="ADD" onclick="add('clean')">Назначить уборку</button>
-        </div>
     </div>
 
     <div style="display: inline-block">

@@ -3,24 +3,35 @@ package com.example.robot.model;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.Calendar;
-import java.util.Date;
+import java.util.*;
 
 @Setter
 @Getter
 public abstract class BasisRobot {
-    protected static int countRobot = 0;
 
     private String name;
 
     private Date dateEnd;
 
-    private String operationCode;
+    private List<String> operationCode = new ArrayList<>(Arrays.asList("kill"));
 
     public abstract String mainFunctional();
 
     public  String killYourSef(){
-        return "Robot " + name +  "kill himself";
+        return "Robot " + name +  " kill himself";
     };
+
+    public String chooseMethod(String task, List<BasisRobot> robotList, BasisRobot robot){
+        if(task != null){
+            if(!task.equals("kill")){
+                return mainFunctional();
+            }else{
+                robotList.remove(robot);
+                return killYourSef();
+            }
+        }
+        return  "";
+    }
+
 
 }

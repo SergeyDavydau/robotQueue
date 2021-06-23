@@ -4,7 +4,6 @@ import com.example.robot.model.BasisRobot;
 import com.example.robot.model.Cleaner;
 import com.example.robot.model.Deliveryman;
 import com.example.robot.model.Producer;
-import com.sun.istack.internal.NotNull;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -12,6 +11,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.stream.Collectors;
 
 @Controller
@@ -19,18 +19,30 @@ public class MainController {
     //    Величина при достижении которой нужно подключать новых роботов к работе
     static final int LIMIT_TASC = 4;
 
-    static volatile Queue<String> robotTask = new LinkedList<>();
+    static volatile Queue<String[]> robotTask = new LinkedList<>();
 
-    static Map<String ,List<BasisRobot>> robotStorage = new HashMap<>();
+    static volatile List<BasisRobot> robotStorage = new ArrayList<>();
     // Промежуточный лист для назначений(что бы не создавать каждый раз в цикле)
     static List<BasisRobot> transitRobotList = new ArrayList<>();
 
-    static List<String> roboLogs = new ArrayList<>();
+    static volatile List<String> roboLogs = new ArrayList<>();
+    //Для валидации актуальных комманд
+    static volatile List<String> robotMainCommand = new ArrayList<>(Arrays.asList("produce", "delivery", "clean", "kill"));
 
     @ResponseBody
-    @RequestMapping(value = "/sendComand", method = RequestMethod.POST)
-    public String setComand(String comand) {
-            robotTask.add(comand);
+    @RequestMapping(value = "/sendCommand", method = RequestMethod.POST)
+    public String setComand(@RequestParam("command") String command, @RequestParam(name = "name", required = false, defaultValue = "noName") String name) {
+        if (robotMainCommand.contains(command)) {
+            //проверка на наличие имени робота с вве денным именем
+            long actualNameSize = robotStorage.stream().filter(robot -> robot.getName().equals(name)).collect(Collectors.counting());
+            if (!command.equals("kill")) {
+                robotTask.add(new String[]{command, name != null && actualNameSize > 0 ? name : null});
+            }
+            //Команду убить себя реализуем только с существующим именем робота
+            else if (command.equals("kill") && actualNameSize > 0) {
+                robotTask.add(new String[]{command, name});
+            }
+        }
         return "";
     }
 
@@ -42,22 +54,22 @@ public class MainController {
         JSONArray robotArr = new JSONArray();
         JSONArray taskArr = new JSONArray();
 
-        roboLogs.forEach(e -> {
-            logsArr.put(new JSONObject().put("value", e));
+        roboLogs.forEach(logs -> {
+            logsArr.put(new JSONObject().put("value", logs));
         });
 
-        List<BasisRobot> baseRobotList = robotStorage.values().stream().flatMap(e -> e.stream()).collect(Collectors.toList());
-        baseRobotList.forEach( f -> {
-                robotArr.put(new JSONObject().put("value", f.getName()));
+        robotStorage.forEach(robot -> {
+            robotArr.put(new JSONObject().put("value", robot.getName()));
         });
 
-        robotTask.forEach(e -> {
-            taskArr.put(new JSONObject().put("value", e));
+        robotTask.forEach(task -> {
+            taskArr.put(new JSONObject().put("value", task[0]));
         });
 
         object.put("logsArr", logsArr);
         object.put("robotArr", robotArr);
         object.put("taskArr", taskArr);
+
         roboLogs.clear();
         return object.toString();
     }
@@ -67,32 +79,38 @@ public class MainController {
         return "robotMenu.html";
     }
 
-    @Scheduled(fixedRate = 2000)
+    @Scheduled(fixedRate = 500)
     public void roboTracker() {
         while (robotTask.peek() != null) {
-            String task = robotTask.peek();
-            if (robotStorage.get(task) != null && robotStorage.get(task).size() > 0) {
+            String[] task = robotTask.peek();
+            //Проверка есть ли в базе роботы способные выполнить комманду
+            if (robotStorage.stream().filter(robot -> robot.getOperationCode().contains(task[0])).collect(Collectors.counting()) > 0) {
 
                 Date currentTime = new Date();
-                transitRobotList = robotStorage.get(task).stream().filter(f -> f.getDateEnd().compareTo(currentTime) <= 0 && f.getOperationCode().equals(task)).collect(Collectors.toList());
+                //Если с командой нету имени ишем свободных по времени. Иначе ищем еще и по соответствию имени
+                transitRobotList = task[1] == null ?
+                        robotStorage.stream()
+                                .filter(robot -> robot.getDateEnd().compareTo(currentTime) <= 0 && robot.getOperationCode().contains(task[0]))
+                                .collect(Collectors.toList()) :
+                        robotStorage.stream()
+                                .filter(robot -> robot.getDateEnd().compareTo(currentTime) <= 0 && robot.getOperationCode().contains(task[0]) && robot.getName().equals(task[1]))
+                                .collect(Collectors.toList());
 
                 if (transitRobotList.size() > 0) {
-                    roboLogs.add(transitRobotList.get(0).mainFunctional());
-                    setWorckPeriod(transitRobotList.get(0));
+                    roboLogs.add(transitRobotList.get(0).chooseMethod(task[0], robotStorage, transitRobotList.get(0)));
+                    setWorkPeriod(transitRobotList.get(0));
                     robotTask.remove();
-                } else if (robotTask.size() > LIMIT_TASC) {
-                    sendRobotTask(task);
-                    robotTask.remove();
-                    roboLogs.add(transitRobotList.get(transitRobotList.size() - 1).mainFunctional());
+                }
+                //Если лимит загрузки позволяет подождать освобождения занятого робота - ждем
+                else if (robotTask.size() > LIMIT_TASC && task[1] == null) {
+                    sendRobotTask(task[0]);
                 }
             } else {
-                sendRobotTask(task);
+                sendRobotTask(task[0]);
             }
-
         }
     }
 
-    @NotNull
     public BasisRobot getRobotByTask(String task) {
         BasisRobot robot = null;
         switch (task) {
@@ -106,26 +124,26 @@ public class MainController {
                 robot = new Cleaner();
                 break;
         }
-
-        setWorckPeriod(robot);
+        if (robot != null) {
+            setWorkPeriod(robot);
+        }
 
         return robot;
     }
 
     public void sendRobotTask(String task) {
         BasisRobot newRobot = getRobotByTask(task);
-        robotTask.remove();
-        if(robotStorage.get(task) == null){
-            robotStorage.put(task, new ArrayList<>(Arrays.asList(newRobot)));
-        }else{
-            robotStorage.get(task).add(newRobot);
+        if (newRobot != null) {
+            robotStorage.add(newRobot);
+            roboLogs.add("Create new robot");
+            roboLogs.add(newRobot.mainFunctional());
+            robotTask.remove();
         }
-        roboLogs.add(newRobot.mainFunctional());
     }
 
-    public void setWorckPeriod(BasisRobot robot) {
+    public void setWorkPeriod(BasisRobot robot) {
         Date start = new Date();
-        Date dateEnd = new Date(start.getTime() + 5000);
+        Date dateEnd = new Date(start.getTime() + 3000);
         //Назначение промежутка времени в котором робот будет недоступен для нового задани
         robot.setDateEnd(dateEnd);
     }

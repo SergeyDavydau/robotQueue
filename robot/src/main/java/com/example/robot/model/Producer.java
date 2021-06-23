@@ -6,6 +6,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class Producer extends BasisRobot {
+    protected static int countRobot = 0;
 
     @Override
     public String mainFunctional() {
@@ -13,8 +14,8 @@ public class Producer extends BasisRobot {
     }
 
     public Producer(){
-        setOperationCode("produce");
+        getOperationCode().add("produce");
         countRobot += 1;
-        setName("Producer №" + countRobot);
+        setName("Producer #" + countRobot);
     }
 }
